@@ -1,1 +1,14 @@
+venv/
 vector_store/
+__pycache__/
+*.pyc
+*.pyo
+*.h5
+*.pkl
+*.pt
+*.pth
+.env
+chroma_db/
+.DS_Store
+Thumbs.db
+.vscode/
