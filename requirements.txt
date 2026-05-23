@@ -7,6 +7,6 @@ transformers
 accelerate
 streamlit
 gradio
-numpy
+numpy 
 python-dotenv
 huggingface-hub
