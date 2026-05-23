@@ -74,7 +74,7 @@ class CorrosionRAG:
         """
         query_vector = self.embedding_model.encode([query]).astype("float32")
         faiss.normalize_L2(query_vector)
-
+        
         distances, indices = self.index.search(query_vector, k=k)
 
         chunks  = [self.all_chunks[i]              for i in indices[0]]
