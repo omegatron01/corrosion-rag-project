@@ -1,0 +1,17 @@
+Corrosion Remediation Guidelines by Grade and Industry
+
+This document provides remediation recommendations based on corrosion grade, industry context, and applicable international standards. These guidelines are intended to assist engineers in making fitness-for-service decisions.
+
+For Grade A corrosion (ISO 8501-1), no immediate remediation is required. The surface should be cleaned and the existing protective coating maintained. The next scheduled inspection should proceed on its normal timetable. Grade A surfaces are considered fully fit for continued service.
+
+For Grade B corrosion (ISO 8501-1), the recommended action is to clean the affected area using mechanical or abrasive methods, remove all loose rust and flaking mill scale, and apply a fresh coat of primer and topcoat to the cleaned surface. The component is considered fit for continued service after remediation. A follow-up inspection should be scheduled within six months to verify that the corrosion has not progressed.
+
+For Grade C corrosion (ISO 8501-1), the recommended action is to conduct an engineering assessment to determine whether the component has experienced any structural material loss. Blast cleaning is required to remove all rust. Wall thickness measurements should be taken at all pitted areas. If wall thickness remains within design tolerances, the component may be returned to service after recoating. If wall thickness has fallen below minimum design thresholds, the component should be removed from service.
+
+For Grade D corrosion (ISO 8501-1), the component must be removed from service immediately pending engineering evaluation. Extensive pitting indicates significant material loss. Non-destructive testing including ultrasonic thickness measurement and magnetic particle inspection should be performed across the affected area. Replacement of the corroded section is often the recommended outcome for Grade D findings.
+
+In marine and offshore environments, the threshold for remediation action is lower than in general industrial settings. Grade B or above in a marine environment triggers immediate inspection and treatment due to the accelerated corrosion rates caused by salt water exposure and humidity.
+
+In structural steel applications such as bridges, buildings, and load-bearing frames, any Grade C or Grade D finding must be reported to a structural engineer before the structure remains in use. Load-bearing capacity may be reduced by corrosion-related material loss even when visible damage appears localized.
+
+In pipeline applications, any finding of active corrosion should be correlated with cathodic protection system performance records and soil resistivity data before a fitness-for-service decision is made. Refer to NACE SP0169 criteria for specific thresholds.

@@ -1,0 +1,13 @@
+NACE SP0169 — Control of External Corrosion on Underground or Submerged Metallic Piping Systems
+
+NACE SP0169, published by NACE International (now part of AMPP), provides recommendations for controlling external corrosion on buried or submerged metallic pipeline systems. It is widely used in the oil and gas, water, and chemical processing industries.
+
+The standard defines corrosion control through two primary methods: protective coatings and cathodic protection. Both methods are typically used together, as coatings provide primary protection and cathodic protection addresses any areas where coating has failed.
+
+With respect to corrosion severity, the standard recognizes that the rate of external corrosion depends on soil resistivity, moisture content, oxygen content, pH, and the presence of bacteria. Soils with resistivity below 2000 ohm-centimeters are considered highly corrosive. Soils with resistivity between 2000 and 10000 ohm-centimeters are considered moderately corrosive. Soils with resistivity above 10000 ohm-centimeters are considered mildly corrosive.
+
+For a pipeline to remain fit for service under this standard, the external surface must show no active pitting beyond what was present at installation, the protective coating must maintain adhesion across at least 95 percent of the surface area, and the cathodic protection system must maintain a pipe-to-soil potential of at least negative 850 millivolts measured with respect to a copper sulfate reference electrode.
+
+When visible pitting corrosion is detected on a pipeline exterior, the depth of penetration relative to the wall thickness determines the action required. Pitting that penetrates less than 10 percent of the wall thickness requires monitoring and documentation. Pitting between 10 and 30 percent of wall thickness requires engineering evaluation and may require repair. Pitting greater than 30 percent of wall thickness typically requires immediate repair or section replacement.
+
+The standard requires that all corrosion findings be documented and that a qualified corrosion engineer assess any anomalies detected during inspection.
