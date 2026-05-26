@@ -3,6 +3,9 @@ import faiss
 import numpy as np
 import pickle
 import torch
+import urllib.request
+import urllib.parse
+import json
 from sentence_transformers import SentenceTransformer
 
 base_dir         = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -10,7 +13,7 @@ vector_store_dir = os.path.join(base_dir, "vector_store")
 faiss_index_path = os.path.join(vector_store_dir, "faiss_index.bin")
 chunks_path      = os.path.join(vector_store_dir, "chunks.pkl")
 
-embedding_model = "all-MiniLM-L6-v2"
+embedding_model_name = "all-MiniLM-L6-v2"
 
 source_names = {
     "iso_8501_rust_grades.txt"   : "ISO 8501-1 Rust Grade Definitions",
@@ -18,10 +21,153 @@ source_names = {
     "nace_sp0169_pipelines.txt"  : "NACE SP0169 Pipeline Corrosion Control",
     "remediation_guidelines.txt" : "Corrosion Remediation Guidelines"}
 
+class faiss_search_tool:
+    """
+    Searches the local FAISS vector database.
+    Contains ISO, ASTM, and NACE standards documents.
+    No internet connection required.
+    """
+
+    def __init__(self):
+        # Load FAISS index
+        if not os.path.exists(faiss_index_path):
+            raise FileNotFoundError(
+                f"FAISS index not found at {faiss_index_path}. "
+                "Run ingest.py first."
+            )
+
+        print("  Loading FAISS index...")
+        self.index = faiss.read_index(faiss_index_path)
+
+        with open(chunks_path, "rb") as f:
+            data = pickle.load(f)
+        self.chunks   = data["chunks"]
+        self.metadata = data["metadata"]
+
+        self.embed = SentenceTransformer(embedding_model_name)
+        print(f"  FAISS tool ready: {self.index.ntotal} chunks")
+
+    def run(self, query, k=3):
+        """
+        Embeds query and searches for top-k matching chunks.
+        Returns dict with results and sources.
+        """
+        query_vector = self.embed.encode([query]).astype("float32")
+        faiss.normalize_L2(query_vector)
+        distances, indices = self.index.search(query_vector, k=k)
+
+        results = []
+        raw_sources = []
+
+        for i in indices[0]:
+            results.append(self.chunks[i])
+            raw_sources.append(self.metadata[i]["source"])
+
+        seen = []
+        for s in raw_sources:
+            name = source_names.get(s, s)
+            if name not in seen:
+                seen.append(name)
+
+        return {
+            "success" : True,
+            "tool"    : "Local Standards Knowledge Base",
+            "results" : results,
+            "sources" : seen}
+
+def wikipedia_search_tool(query):
+    """
+    Searches Wikipedia using their free REST API.
+    Returns a plain text summary of the most relevant article.
+    No API key needed.
+    """
+    try:
+        encoded_query = urllib.parse.quote(query)
+        url = (
+            f"https://en.wikipedia.org/api/rest_v1/"
+            f"page/summary/{encoded_query}")
+
+        req = urllib.request.Request(
+            url,
+            headers={"User-Agent": "CorrosionRAG/1.0"})
+
+        with urllib.request.urlopen(req, timeout=5) as response:
+            data = json.loads(response.read())
+
+        if "extract" in data and data["extract"]:
+            return {
+                "success" : True,
+                "tool"    : "Wikipedia",
+                "title"   : data.get("title", query),
+                "content" : data["extract"][:800]}
+
+        return {
+            "success" : False,
+            "tool"    : "Wikipedia",
+            "content" : ""}
+
+    except Exception as e:
+        return {
+            "success" : False,
+            "tool"    : "Wikipedia",
+            "content" : ""}
+
+class tool_router:
+    """
+    Orchestrates all available tools.
+    Runs each tool, collects results, combines into
+    a single context string for Gemma to reason over.
+    """
+
+    def __init__(self, faiss_tool):
+        self.faiss_tool = faiss_tool
+
+    def run(self, vision_result):
+        """
+        Runs all tools relevant to the vision result.
+        Returns (combined_context, tools_used).
+
+        combined_context — single string fed to Gemma
+        tools_used       — list of tool names for display
+        """
+        grade         = vision_result["corrosion_grade"]
+        corrosion_type = vision_result["corrosion_type"]
+
+        combined_context = ""
+        tools_used       = []
+
+        print("  Tool 1: Searching local standards database...")
+        faiss_query = (
+            f"Standards for {grade} {corrosion_type} "
+            f"on structural metal. "
+            f"Fitness for service assessment and recommended action."
+        )
+        faiss_result = self.faiss_tool.run(faiss_query)
+
+        if faiss_result["success"]:
+            tools_used.extend(faiss_result["sources"])
+            combined_context += "\n[LOCAL STANDARDS DATABASE]\n"
+            for chunk in faiss_result["results"]:
+                combined_context += f"{chunk}\n"
+
+        print("  Tool 2: Searching Wikipedia...")
+        wiki_query  = f"ISO 8501 {grade} rust corrosion structural steel"
+        wiki_result = wikipedia_search_tool(wiki_query)
+
+        if wiki_result["success"]:
+            tools_used.append(f"Wikipedia: {wiki_result['title']}")
+            combined_context += f"\n[WIKIPEDIA: {wiki_result['title']}]\n"
+            combined_context += wiki_result["content"] + "\n"
+        else:
+            print("  Tool 2: Wikipedia unavailable, continuing without it")
+
+        return combined_context, tools_used
+
+
 class CorrosionRAG:
     """
-    Encapsulates the full RAG query pipeline.
-    Load once, query many times.
+    Full agentic RAG pipeline.
+    Combines MCP-style tool routing with Gemma reasoning.
 
     Usage:
         rag = CorrosionRAG(gemma_model, tokenizer)
@@ -29,79 +175,40 @@ class CorrosionRAG:
     """
 
     def __init__(self, gemma_model, tokenizer):
-        self.gemma_model     = gemma_model
-        self.tokenizer       = tokenizer
-        self.embedding_model = None
-        self.index           = None
-        self.all_chunks      = None
-        self.all_metadata    = None
-        self._load_resources()
+        self.gemma_model = gemma_model
+        self.tokenizer   = tokenizer
 
-    def _load_resources(self):
-        """Load FAISS index, chunks, and embedding model into memory."""
+        print("Initialising RAG pipeline...")
 
-        if not os.path.exists(faiss_index_path):
-            raise FileNotFoundError(
-                f"FAISS index not found at {faiss_index_path}. "
-                "Run ingest.py first.")
+        self.faiss_tool = faiss_search_tool()
 
-        print("Loading FAISS index...")
-        self.index = faiss.read_index(faiss_index_path)
-        print(f" {self.index.ntotal} chunks loaded")
+        self.router = tool_router(self.faiss_tool)
 
-        print("Loading chunks and metadata...")
-        with open(chunks_path, "rb") as f:
-            data = pickle.load(f)
-        self.all_chunks   = data["chunks"]
-        self.all_metadata = data["metadata"]
-        print(f"{len(self.all_chunks)} chunks ready")
+        print("RAG pipeline ready!")
 
-        print(f"Loading embedding model ({embedding_model})...")
-        self.embedding_model = SentenceTransformer(embedding_model)
-        print("Embedding model ready")
-
-    def _build_query(self, vision_result):
-        """Turn vision model output into a search question."""
-        return (
-            f"International standards for {vision_result['corrosion_grade']} "
-            f"{vision_result['corrosion_type']} on structural metal. "
-            f"Fitness for service assessment and recommended action.")
-
-    def _retrieve(self, query, k=3):
-        """
-        Embed the query and search FAISS for top-k matching chunks.
-        Returns (chunks, sources).
-        """
-        query_vector = self.embedding_model.encode([query]).astype("float32")
-        faiss.normalize_L2(query_vector)
-        
-        distances, indices = self.index.search(query_vector, k=k)
-
-        chunks  = [self.all_chunks[i]              for i in indices[0]]
-        sources = [self.all_metadata[i]["source"]  for i in indices[0]]
-
-        return chunks, sources
-
-    def _build_prompt(self, vision_result, context):
-        """Build the full prompt for Gemma."""
+    def _build_prompt(self, vision_result, combined_context):
+        """Builds the full prompt for Gemma."""
         return f"""<start_of_turn>user
 You are a corrosion engineering expert assistant.
-Do not use any Markdown formatting, asterisks, or bold text. Write in plain text only.
-Assess whether this metal component is fit for service based on the
-detected corrosion and the international standards provided below.
+Do not use any Markdown formatting, asterisks, or bold text.
+Write in plain text only.
+
+You have been given information from multiple sources.
+Use all of it to assess whether this metal component is fit for service.
 
 Always:
 - State clearly if the component is fit for service or not
-- Cite which standard supports your answer
+- Cite which source or standard supports your answer
 - Give a specific recommended action
+- Be concise and professional
 
 VISION MODEL DETECTION:
 - Corrosion Grade: {vision_result['corrosion_grade']}
 - Corrosion Type:  {vision_result['corrosion_type']}
 - Confidence:      {vision_result['confidence'] * 100:.0f}%
 
-RETRIEVED STANDARDS:
-{context}
+INFORMATION FROM TOOLS:
+{combined_context}
 
 What is your assessment and recommendation?
 <end_of_turn>
@@ -109,7 +216,7 @@ What is your assessment and recommendation?
 """
 
     def _run_gemma(self, prompt):
-        """Send prompt to Gemma and return decoded response."""
+        """Sends prompt to Gemma and returns decoded response."""
         inputs = self.tokenizer(
             prompt,
             return_tensors="pt"
@@ -121,59 +228,42 @@ What is your assessment and recommendation?
                 max_new_tokens=400,
                 temperature=0.2,
                 do_sample=True,
-                pad_token_id=self.tokenizer.eos_token_id
-            )
+                pad_token_id=self.tokenizer.eos_token_id)
 
-        full_output = self.tokenizer.decode(output[0], skip_special_tokens=True)
-        answer      = full_output.split("model")[-1].strip()
+        full_output = self.tokenizer.decode(
+            output[0],
+            skip_special_tokens=True)
+        answer = full_output.split("model")[-1].strip()
         return answer
-
-    def _format_sources(self, sources):
-        """Remove duplicates and map to professional names."""
-        seen = []
-        for s in sources:
-            name = source_names.get(s, s)
-            if name not in seen:
-                seen.append(name)
-        return seen
 
     def query(self, vision_result):
         """
-        Full RAG pipeline — call this with vision model output.
+        Full agentic RAG pipeline.
 
         Input:
             vision_result = {
-                "corrosion_grade": "Grade C",
-                "corrosion_type" : "surface corrosion",
-                "confidence"     : 0.91
+                "corrosion_grade" : "Grade C",
+                "corrosion_type"  : "surface corrosion",
+                "confidence"      : 0.91
             }
 
         Output:
             {
-                "answer" : "The component is not fit for service...",
-                "sources": ["ISO 8501-1 Rust Grade Definitions", ...]
+                "answer"  : "The component is not fit for service...",
+                "sources" : ["ISO 8501-1...", "Wikipedia: Rust..."]
             }
         """
+        print("Running tool router...")
 
-        # Step 1 — build search query
-        query = self._build_query(vision_result)
-
-        # Step 2 — retrieve relevant chunks
-        chunks, sources = self._retrieve(query, k=3)
-
-        # Step 3 — format context (no source labels)
-        context = "\n".join(chunks)
-
-        # Step 4 — build prompt
-        prompt = self._build_prompt(vision_result, context)
-
-        # Step 5 — run Gemma
+        combined_context, tools_used = self.router.run(vision_result)
+        prompt = self._build_prompt(vision_result, combined_context)
+        print("  Running Gemma...")
         answer = self._run_gemma(prompt)
-
-        # Step 6 — format sources professionally
-        formatted_sources = self._format_sources(sources)
+        seen = []
+        for t in tools_used:
+            if t not in seen:
+                seen.append(t)
 
         return {
-            "answer" : answer,
-            "sources": formatted_sources
-        }
+            "answer"  : answer,
+            "sources" : seen}
