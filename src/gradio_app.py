@@ -34,12 +34,10 @@ def load_vision_model():
     print("\nLoading vision model...")
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    # Rebuild the same architecture used during training
     corrosion_model = models.mobilenet_v2(weights=None)
     num_features    = corrosion_model.classifier[1].in_features
     corrosion_model.classifier[1] = nn.Linear(num_features, 2)
 
-    # Load your saved weights
     corrosion_model.load_state_dict(
         torch.load(model_path, map_location=device)
     )
