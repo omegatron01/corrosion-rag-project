@@ -5,14 +5,14 @@ import pickle
 import torch
 from sentence_transformers import SentenceTransformer
 
-BASE_DIR         = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-VECTOR_STORE_DIR = os.path.join(BASE_DIR, "vector_store")
-FAISS_INDEX_PATH = os.path.join(VECTOR_STORE_DIR, "faiss_index.bin")
-CHUNKS_PATH      = os.path.join(VECTOR_STORE_DIR, "chunks.pkl")
+base_dir         = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+vector_store_dir = os.path.join(base_dir, "vector_store")
+faiss_index_path = os.path.join(vector_store_dir, "faiss_index.bin")
+chunks_path      = os.path.join(vector_store_dir, "chunks.pkl")
 
-EMBEDDING_MODEL_NAME = "all-MiniLM-L6-v2"
+embedding_model = "all-MiniLM-L6-v2"
 
-SOURCE_NAMES = {
+source_names = {
     "iso_8501_rust_grades.txt"   : "ISO 8501-1 Rust Grade Definitions",
     "astm_b117_acceptance.txt"   : "ASTM B117 Salt Spray Testing Standard",
     "nace_sp0169_pipelines.txt"  : "NACE SP0169 Pipeline Corrosion Control",
@@ -40,24 +40,24 @@ class CorrosionRAG:
     def _load_resources(self):
         """Load FAISS index, chunks, and embedding model into memory."""
 
-        if not os.path.exists(FAISS_INDEX_PATH):
+        if not os.path.exists(faiss_index_path):
             raise FileNotFoundError(
-                f"FAISS index not found at {FAISS_INDEX_PATH}. "
+                f"FAISS index not found at {faiss_index_path}. "
                 "Run ingest.py first.")
 
         print("Loading FAISS index...")
-        self.index = faiss.read_index(FAISS_INDEX_PATH)
+        self.index = faiss.read_index(faiss_index_path)
         print(f" {self.index.ntotal} chunks loaded")
 
         print("Loading chunks and metadata...")
-        with open(CHUNKS_PATH, "rb") as f:
+        with open(chunks_path, "rb") as f:
             data = pickle.load(f)
         self.all_chunks   = data["chunks"]
         self.all_metadata = data["metadata"]
         print(f"{len(self.all_chunks)} chunks ready")
 
-        print(f"Loading embedding model ({EMBEDDING_MODEL_NAME})...")
-        self.embedding_model = SentenceTransformer(EMBEDDING_MODEL_NAME)
+        print(f"Loading embedding model ({embedding_model})...")
+        self.embedding_model = SentenceTransformer(embedding_model)
         print("Embedding model ready")
 
     def _build_query(self, vision_result):
@@ -132,7 +132,7 @@ What is your assessment and recommendation?
         """Remove duplicates and map to professional names."""
         seen = []
         for s in sources:
-            name = SOURCE_NAMES.get(s, s)
+            name = source_names.get(s, s)
             if name not in seen:
                 seen.append(name)
         return seen

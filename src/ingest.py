@@ -4,18 +4,18 @@ import numpy as np
 import pickle
 from sentence_transformers import SentenceTransformer
 
-BASE_DIR         = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-KNOWLEDGE_BASE_DIR = os.path.join(BASE_DIR, "knowledge_base")
-OUTPUT_DIR       = os.path.join(BASE_DIR, "vector_store")
+base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+knowledge_base_dir = os.path.join(base_dir, "knowledge_base")
+output_dir       = os.path.join(base_dir, "vector_store")
 
-os.makedirs(OUTPUT_DIR, exist_ok=True)
+os.makedirs(output_dir, exist_ok=True)
 
-FAISS_INDEX_PATH = os.path.join(OUTPUT_DIR, "faiss_index.bin")
-CHUNKS_PATH      = os.path.join(OUTPUT_DIR, "chunks.pkl")
-EMBEDDING_MODEL_NAME = "all-MiniLM-L6-v2"
+faiss_index_path = os.path.join(output_dir, "faiss_index.bin")
+chunks_path      = os.path.join(output_dir, "chunks.pkl")
+embedding_model = "all-MiniLM-L6-v2"
 
-CHUNK_SIZE = 150   
-OVERLAP    = 30   
+chunk_size = 150   
+overlap    = 30   
 
 
 def load_documents(knowledge_base_dir):
@@ -40,10 +40,10 @@ def load_documents(knowledge_base_dir):
     return documents
 
 
-def chunk_text(text, chunk_size=CHUNK_SIZE, overlap=OVERLAP):
+def chunk_text(text, chunk_size=chunk_size, overlap=overlap):
     """
     Splits text into overlapping chunks of chunk_size words.
-    Overlap ensures sentences at boundaries are never lost.
+    overlap ensures sentences at boundaries are never lost.
     """
     words  = text.split()
     chunks = []
@@ -69,11 +69,11 @@ def build_knowledge_base():
     """
 
     print("\n" + "=" * 55)
-    print("CORROSION RAG — KNOWLEDGE BASE INGESTION")
+    print("Corrosion — Knowledge Base Ingestion")
     print("=" * 55)
-    documents = load_documents(KNOWLEDGE_BASE_DIR)
+    documents = load_documents(knowledge_base_dir)
 
-    print(f"\nChunking documents (size={CHUNK_SIZE}, overlap={OVERLAP})...")
+    print(f"\nChunking documents (size={chunk_size}, overlap={overlap})...")
 
     all_chunks   = []  
     all_metadata = []  
@@ -90,8 +90,8 @@ def build_knowledge_base():
             })
 
     print(f"\nTotal chunks across all files: {len(all_chunks)}")
-    print(f"\nLoading embedding model ({EMBEDDING_MODEL_NAME})")
-    embedding_model = SentenceTransformer(EMBEDDING_MODEL_NAME)
+    print(f"\nLoading embedding model ({embedding_model})")
+    embedding_model = SentenceTransformer(embedding_model)
     print("Embedding model ready!")
 
     print("\nEmbedding all chunks (this may take a minute)...")
@@ -111,11 +111,11 @@ def build_knowledge_base():
     index.add(embeddings)
     print(f"FAISS index built with {index.ntotal} vectors")
 
-    print(f"\nSaving index to: {FAISS_INDEX_PATH}")
-    faiss.write_index(index, FAISS_INDEX_PATH)
+    print(f"\nSaving index to: {faiss_index_path}")
+    faiss.write_index(index, faiss_index_path)
 
-    print(f"Saving chunks to: {CHUNKS_PATH}")
-    with open(CHUNKS_PATH, "wb") as f:
+    print(f"Saving chunks to: {chunks_path}")
+    with open(chunks_path, "wb") as f:
         pickle.dump({
             "chunks"  : all_chunks,
             "metadata": all_metadata

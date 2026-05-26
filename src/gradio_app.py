@@ -1,10 +1,3 @@
-# ─────────────────────────────────────────────────────────────
-# app.py
-# Gradio interface for the Metal Corrosion Assessment System.
-# Connects the vision model and RAG pipeline into one UI.
-# Run this file to launch the chatbot interface.
-# ─────────────────────────────────────────────────────────────
-
 import os
 import sys
 import tempfile
@@ -16,16 +9,13 @@ from torchvision import transforms, models
 import torch.nn as nn
 from transformers import AutoTokenizer, AutoModelForCausalLM, BitsAndBytesConfig
 
-# Add src/ to path so we can import query.py
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 from query import CorrosionRAG
 
-# ── Paths ──────────────────────────────────────────────────────
-BASE_DIR        = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-MODEL_PATH      = os.path.join(BASE_DIR, "models", "best_corrosion_model.pth")
-GEMMA_MODEL_ID  = "google/gemma-3-4b-it"
+base_dir        = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+model_path      = os.path.join(base_dir, "models", "best_corrosion_model.pth")
+gemma_model_id  = "google/gemma-3-4b-it"
 
-# ── Image transforms (same as training) ───────────────────────
 val_test_transforms = transforms.Compose([
     transforms.Resize((224, 224)),
     transforms.ToTensor(),
@@ -33,13 +23,8 @@ val_test_transforms = transforms.Compose([
                          [0.229, 0.224, 0.225])
 ])
 
-# ── Class names (must match your training folder names) ────────
-CLASS_NAMES = ["CORROSION", "NO_CORROSION"]
+class_names = ["CORROSION", "NO_CORROSION"]
 
-
-# ══════════════════════════════════════════════════════════════
-# STEP 1 — Load Vision Model
-# ══════════════════════════════════════════════════════════════
 
 def load_vision_model():
     """
@@ -56,18 +41,14 @@ def load_vision_model():
 
     # Load your saved weights
     corrosion_model.load_state_dict(
-        torch.load(MODEL_PATH, map_location=device)
+        torch.load(model_path, map_location=device)
     )
     corrosion_model.eval()
     corrosion_model = corrosion_model.to(device)
 
-    print(f"  ✅ Vision model loaded on: {device}")
+    print(f"Vision model loaded on: {device}")
     return corrosion_model, device
 
-
-# ══════════════════════════════════════════════════════════════
-# STEP 2 — Load Gemma
-# ══════════════════════════════════════════════════════════════
 
 def load_gemma():
     """
@@ -81,43 +62,32 @@ def load_gemma():
         bnb_4bit_compute_dtype=torch.bfloat16
     )
 
-    tokenizer = AutoTokenizer.from_pretrained(GEMMA_MODEL_ID)
+    tokenizer = AutoTokenizer.from_pretrained(gemma_model_id)
 
     gemma_model = AutoModelForCausalLM.from_pretrained(
-        GEMMA_MODEL_ID,
+        gemma_model_id,
         quantization_config=bnb_config,
         device_map="auto"
     )
 
-    print("  ✅ Gemma loaded!")
+    print("Gemma loaded!")
     return tokenizer, gemma_model
-
-
-# ══════════════════════════════════════════════════════════════
-# STEP 3 — Vision Model Prediction
-# ══════════════════════════════════════════════════════════════
 
 def predict_corrosion(image_path, corrosion_model, device):
     """
     Takes an image path, runs it through the vision model.
     Returns a structured dict for the RAG pipeline.
     """
-
-    # Load and preprocess image
     img          = Image.open(image_path).convert("RGB")
     input_tensor = val_test_transforms(img).unsqueeze(0).to(device)
 
-    # Run through model
     with torch.no_grad():
         raw_outputs   = corrosion_model(input_tensor)
         probabilities = F.softmax(raw_outputs[0], dim=0)
         confidence, predicted_idx = torch.max(probabilities, dim=0)
 
-    # Convert to Python types
-    predicted_class  = CLASS_NAMES[predicted_idx.item()]
+    predicted_class  = class_names[predicted_idx.item()]
     confidence_score = confidence.item()
-
-    # Map to ISO corrosion grade
     if predicted_class.lower() == "corrosion":
         if confidence_score >= 0.90:
             grade = "Grade C"
@@ -134,32 +104,24 @@ def predict_corrosion(image_path, corrosion_model, device):
         "confidence"      : confidence_score,
         "raw_prediction"  : predicted_class,
         "all_probabilities": {
-            CLASS_NAMES[i]: round(probabilities[i].item(), 4)
-            for i in range(len(CLASS_NAMES))
+            class_names[i]: round(probabilities[i].item(), 4)
+            for i in range(len(class_names))
         }
     }
 
-
-# ══════════════════════════════════════════════════════════════
-# STEP 4 — Gradio Handler
-# ══════════════════════════════════════════════════════════════
 
 def assess_metal_image(image, corrosion_model, device, rag):
     """
     Called by Gradio when user clicks Assess Corrosion.
     Returns two strings: vision output and Gemma assessment.
     """
-
-    # Save PIL image to temp file
     with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as tmp:
         image.save(tmp.name)
         tmp_path = tmp.name
 
-    # Run vision model
     vision_result = predict_corrosion(tmp_path, corrosion_model, device)
     os.unlink(tmp_path)
 
-    # Format probabilities
     probs = vision_result["all_probabilities"]
     prob_lines = "\n".join([
         f"  {k.replace('_', ' ').title()}: {v*100:.1f}%"
@@ -176,16 +138,13 @@ Probabilities:
 {prob_lines}
 """
 
-    # Run RAG pipeline
     rag_result = rag.query(vision_result)
 
-    # Format standards
     standards = "\n".join([
         f"  - {name}" for name in rag_result["sources"]
     ])
 
     gemma_output = f"""GEMMA'S ASSESSMENT
-------------------
 {rag_result['answer']}
 
 STANDARDS REFERENCED:
@@ -194,17 +153,10 @@ STANDARDS REFERENCED:
 
     return vision_output, gemma_output
 
-
-# ══════════════════════════════════════════════════════════════
-# STEP 5 — Build and Launch Gradio Interface
-# ══════════════════════════════════════════════════════════════
-
 def launch_app():
     """
     Loads all models and launches the Gradio interface.
     """
-
-    # Load all models once at startup
     print("\n" + "=" * 55)
     print("METAL CORROSION ASSESSMENT SYSTEM — STARTING UP")
     print("=" * 55)
@@ -213,13 +165,11 @@ def launch_app():
     tokenizer, gemma_model  = load_gemma()
     rag = CorrosionRAG(gemma_model, tokenizer)
 
-    print("\n✅ All models loaded. Launching interface...\n")
+    print("\nAll models loaded. Launching interface...\n")
 
-    # Wrap handler to inject models without Gradio seeing them
     def handler(image):
         return assess_metal_image(image, corrosion_model, device, rag)
 
-    # Build interface
     with gr.Blocks(title="Metal Corrosion Assessment System") as app:
 
         gr.Markdown("# Metal Corrosion Assessment System")
@@ -246,7 +196,5 @@ def launch_app():
 
     app.launch(share=True)
 
-
-# ── Entry point ────────────────────────────────────────────────
 if __name__ == "__main__":
     launch_app()

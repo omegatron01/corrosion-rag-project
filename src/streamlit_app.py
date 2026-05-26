@@ -93,8 +93,8 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-BASE_DIR   = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-MODEL_PATH = os.path.join(BASE_DIR, "models", "best_corrosion_model.pth")
+base_dir   = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+model_path = os.path.join(base_dir, "models", "best_corrosion_model.pth")
 
 val_transforms = transforms.Compose([
     transforms.Resize((224, 224)),
@@ -103,7 +103,7 @@ val_transforms = transforms.Compose([
                          [0.229, 0.224, 0.225])
 ])
 
-CLASS_NAMES = ["CORROSION", "NO_CORROSION"]
+class_names = ["CORROSION", "NO_CORROSION"]
 
 @st.cache_resource
 def load_vision_model():
@@ -113,7 +113,7 @@ def load_vision_model():
         model.classifier[1].in_features, 2
     )
     model.load_state_dict(
-        torch.load(MODEL_PATH, map_location=device)
+        torch.load(model_path, map_location=device)
     )
     model.eval()
     return model.to(device), device
@@ -144,7 +144,7 @@ def predict_corrosion(image, model, device):
         probabilities = F.softmax(outputs[0], dim=0)
         confidence, predicted_idx = torch.max(probabilities, dim=0)
 
-    predicted_class  = CLASS_NAMES[predicted_idx.item()]
+    predicted_class  = class_names[predicted_idx.item()]
     confidence_score = confidence.item()
 
     if predicted_class.lower() == "corrosion":
@@ -168,8 +168,8 @@ def predict_corrosion(image, model, device):
         "raw_prediction"  : predicted_class,
         "severity"        : severity,
         "probabilities"   : {
-            CLASS_NAMES[i]: round(probabilities[i].item(), 4)
-            for i in range(len(CLASS_NAMES))
+            class_names[i]: round(probabilities[i].item(), 4)
+            for i in range(len(class_names))
         }
     }
 
