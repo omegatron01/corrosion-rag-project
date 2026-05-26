@@ -1,9 +1,3 @@
-# ─────────────────────────────────────────────────────────────
-# tools.py
-# Free MCP-style tools for the corrosion assessment system.
-# Each tool takes a query and returns text results.
-# No API keys required.
-# ─────────────────────────────────────────────────────────────
 
 import urllib.request
 import urllib.parse
@@ -14,7 +8,6 @@ import pickle
 import os
 from sentence_transformers import SentenceTransformer
 
-# ── Tool 1: Wikipedia Search ───────────────────────────────────
 def search_wikipedia(query, sentences=5):
     """
     Searches Wikipedia for engineering standards information.
@@ -22,7 +15,6 @@ def search_wikipedia(query, sentences=5):
     Free, no API key needed.
     """
     try:
-        # Wikipedia has a free REST API
         encoded_query = urllib.parse.quote(query)
         url = f"https://en.wikipedia.org/api/rest_v1/page/summary/{encoded_query}"
 
@@ -45,8 +37,6 @@ def search_wikipedia(query, sentences=5):
     except Exception as e:
         return {"success": False, "content": f"Wikipedia search failed: {e}"}
 
-
-# ── Tool 2: FAISS Knowledge Base Search ───────────────────────
 class FAISSSearchTool:
     """
     Searches your local FAISS vector database.
@@ -78,8 +68,6 @@ class FAISSSearchTool:
             "results": results
         }
 
-
-# ── Tool Router ────────────────────────────────────────────────
 class ToolRouter:
     """
     Decides which tools to call based on the vision result.
@@ -102,7 +90,6 @@ class ToolRouter:
         grade = vision_result["corrosion_grade"]
         ctype = vision_result["corrosion_type"]
 
-        # ── Tool 1: Always search FAISS knowledge base ─────────
         print("  Running tool: FAISS knowledge base search...")
         faiss_result = self.faiss_tool.search(
             f"Standards for {grade} {ctype} on structural metal "
@@ -114,7 +101,6 @@ class ToolRouter:
             for r in faiss_result["results"]:
                 combined_context += f"{r['content']}\n"
 
-        # ── Tool 2: Wikipedia search for the corrosion grade ───
         print("  Running tool: Wikipedia search...")
         wiki_query = f"ISO 8501 {grade} rust corrosion steel"
         wiki_result = search_wikipedia(wiki_query)
