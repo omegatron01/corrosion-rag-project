@@ -12,7 +12,7 @@ os.makedirs(output_dir, exist_ok=True)
 
 faiss_index_path = os.path.join(output_dir, "faiss_index.bin")
 chunks_path      = os.path.join(output_dir, "chunks.pkl")
-embedding_model = "all-MiniLM-L6-v2"
+embedding_model_name = "all-MiniLM-L6-v2"
 
 chunk_size = 150   
 overlap    = 30   
@@ -90,8 +90,8 @@ def build_knowledge_base():
             })
 
     print(f"\nTotal chunks across all files: {len(all_chunks)}")
-    print(f"\nLoading embedding model ({embedding_model})")
-    embedding_model = SentenceTransformer(embedding_model)
+    print(f"\nLoading embedding model ({embedding_model_name})")
+    embedding_model = SentenceTransformer(embedding_model_name)
     print("Embedding model ready!")
 
     print("\nEmbedding all chunks (this may take a minute)...")
